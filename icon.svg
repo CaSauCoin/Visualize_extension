@@ -1,0 +1,16 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect width="256" height="256" rx="50" fill="#252526"/>
+    
+    <path d="M128 60 L60 160" stroke="#CCCCCC" stroke-width="8"/>
+    <path d="M128 60 L196 160" stroke="#CCCCCC" stroke-width="8"/>
+    <path d="M60 160 L196 160" stroke="#CCCCCC" stroke-width="8"/>
+    
+    <circle cx="128" cy="60" r="24" fill="#007ACC" stroke="#333333" stroke-width="4"/>
+    
+    <circle cx="60" cy="160" r="24" fill="#0E4A6E" stroke="#333333" stroke-width="4"/>
+    
+    <circle cx="196" cy="160" r="24" fill="#9C5B0B" stroke="#333333" stroke-width="4"/>
+    
+    <rect x="150" y="180" width="80" height="50" rx="10" fill="#3C3C3C"/>
+    <text x="190" y="215" font-family="Arial, sans-serif" font-weight="bold" font-size="32" fill="#FFFFFF" text-anchor="middle">C++</text>
+</svg>
