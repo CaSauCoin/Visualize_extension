@@ -2,9 +2,9 @@
   "name": "cpp-viz-tool",
   "displayName": "C++ Viz Tool - Architect View", 
   "description": "Visualize C++ Code Flowchart & Project Dependency Graph. Best for Embedded/IoT.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "CaSauCoin",  
-  "icon": "https://github.com/CaSauCoin/Visualize_extension/blob/main/icon.png?raw=true",       
+  "icon": "icon.png",       
   "engines": {
     "vscode": "^1.75.0"
   },

@@ -2,7 +2,7 @@
 
 A powerful extension for Embedded/C++ Developers to visualize Code Logic & Project Architecture.
 
-![Logo](icon.png)
+![Logo](https://github.com/CaSauCoin/Visualize_extension/blob/main/icon.png?raw=true)
 
 ## Features ✨
 
