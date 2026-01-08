@@ -1,10 +1,9 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 
-// Return type
 export interface GraphResult {
     mermaid: string;
-    adjacency: Record<string, string[]>; // Map: NodeID -> [NeighborID1, NeighborID2...]
+    adjacency: Record<string, string[]>;
 }
 
 export class RepoScanner {
@@ -15,6 +14,7 @@ export class RepoScanner {
     ];
 
     public async getProjectFolders(): Promise<string[]> {
+        // Hỗ trợ cả C và C++
         const files = await vscode.workspace.findFiles('**/*.{c,cpp,h,hpp,cc,hh,cxx,hxx}');
         const folders = new Set<string>();
         for (const file of files) {
@@ -27,8 +27,8 @@ export class RepoScanner {
         return Array.from(folders).sort();
     }
 
-    // Update: Return GraphResult (mermaid + adjacency)
     public async generateDependencyGraph(allowedFolders: string[] | null = null): Promise<GraphResult> {
+        // 1. Quét file
         const files = await vscode.workspace.findFiles('**/*.{c,cpp,h,hpp,cc,hh,cxx,hxx}');
         
         const pathToId = new Map<string, string>();
@@ -36,18 +36,25 @@ export class RepoScanner {
         let idCounter = 0;
         const validFiles: vscode.Uri[] = [];
 
-        // 1. Filter Files & Create IDs
+        // Kiểm tra xem có đang ở chế độ Filter không
+        const isFilterMode = allowedFolders !== null && allowedFolders.length > 0;
+
+        // 2. Lọc File hợp lệ & Tạo ID
         for (const file of files) {
             const pathStr = file.fsPath.replace(/\\/g, '/');
             if (this.IGNORE_FOLDERS.some(folder => pathStr.includes(`/${folder}/`))) continue;
 
-            if (allowedFolders && allowedFolders.length > 0) {
+            // Logic lọc theo folder người dùng chọn
+            if (isFilterMode) {
                 const dir = path.dirname(file.fsPath);
                 const relativeDir = vscode.workspace.asRelativePath(dir);
                 const checkDir = relativeDir === '.' ? 'Root' : relativeDir;
-                const isSelected = allowedFolders.some(allowed => 
+                
+                // File phải nằm trong folder được chọn (hoặc con của nó)
+                const isSelected = allowedFolders!.some(allowed => 
                     checkDir === allowed || checkDir.startsWith(allowed + '/')
                 );
+                
                 if (!isSelected) continue;
             }
 
@@ -57,25 +64,28 @@ export class RepoScanner {
             validFiles.push(file);
         }
 
-        // 2. Build edges & adjacency list
+        // 3. Xây dựng kết nối (Edges)
         const edges: { from: string, to: string }[] = [];
         const nodeDegrees = new Map<string, number>();
-        // Neighbor list to send down to the Webview
         const adjacency: Record<string, string[]> = {}; 
 
         for (const file of validFiles) {
             const sourceId = pathToId.get(file.fsPath)!;
+            
+            // Init data
             if (!nodeDegrees.has(sourceId)) nodeDegrees.set(sourceId, 0);
             if (!adjacency[sourceId]) adjacency[sourceId] = [];
 
             try {
                 const doc = await vscode.workspace.openTextDocument(file);
                 const content = doc.getText();
+                // Regex tìm #include
                 const includeRegex = /#include\s*["<]([^">]+)[">]/g;
                 let match;
 
                 while ((match = includeRegex.exec(content)) !== null) {
                     const includedName = match[1];
+                    // Chỉ link tới các file CŨNG NẰM TRONG danh sách validFiles
                     const targetEntry = Array.from(pathToId.entries()).find(([p, id]) => {
                         return p.replace(/\\/g, '/').endsWith(includedName);
                     });
@@ -85,12 +95,13 @@ export class RepoScanner {
                         if (sourceId !== targetId) {
                             edges.push({ from: sourceId, to: targetId });
                             
-                            // Update Degrees
+                            // Tăng biến đếm kết nối
                             nodeDegrees.set(sourceId, (nodeDegrees.get(sourceId) || 0) + 1);
                             nodeDegrees.set(targetId, (nodeDegrees.get(targetId) || 0) + 1);
 
-                            // Update adjacency (store both directions for easier highlighting)
+                            // Adjacency cho highlight
                             if (!adjacency[sourceId].includes(targetId)) adjacency[sourceId].push(targetId);
+                            // 2 chiều (để click con sáng cha)
                             if (!adjacency[targetId]) adjacency[targetId] = [];
                             if (!adjacency[targetId].includes(sourceId)) adjacency[targetId].push(sourceId);
                         }
@@ -99,17 +110,21 @@ export class RepoScanner {
             } catch (e) {}
         }
 
-        // 3. Generate Mermaid
+        // 4. Generate Mermaid
         let mermaid = "graph LR;\n";
         mermaid += "classDef file fill:#2d2d2d,stroke:#569cd6,stroke-width:2px,color:#fff;\n";
         mermaid += "classDef folder fill:#1e1e1e,stroke:#444,stroke-width:2px,color:#aaa,stroke-dasharray: 5 5;\n";
-        mermaid += "classDef faded opacity:0.1,stroke:#444;\n"; // Class used to fade nodes
 
         const folderGroups = new Map<string, string[]>();
 
         for (const file of validFiles) {
             const fileId = pathToId.get(file.fsPath)!;
-            if ((nodeDegrees.get(fileId) || 0) === 0) continue;
+            
+            // Nếu đang Filter Mode (isFilterMode = true) -> HIỆN TẤT CẢ (Không check degree)
+            // Nếu đang Full Scan (isFilterMode = false) -> Chỉ hiện node có kết nối (Check degree > 0) để giảm tải
+            if (!isFilterMode && (nodeDegrees.get(fileId) || 0) === 0) {
+                continue; 
+            }
 
             const dir = path.dirname(file.fsPath);
             const relativeDir = vscode.workspace.asRelativePath(dir);
@@ -132,18 +147,23 @@ export class RepoScanner {
         }
 
         for (const edge of edges) {
-            const isSourceVisible = (nodeDegrees.get(edge.from) || 0) > 0;
-            const isTargetVisible = (nodeDegrees.get(edge.to) || 0) > 0;
-            if (isSourceVisible && isTargetVisible) {
+            // Chỉ vẽ edge nếu cả 2 đầu đều được hiển thị
+            // (Trong Filter Mode thì luôn hiển thị nên luôn vẽ)
+            // (Trong Full Mode thì check degree > 0 mới vẽ)
+            const showSource = isFilterMode || (nodeDegrees.get(edge.from) || 0) > 0;
+            const showTarget = isFilterMode || (nodeDegrees.get(edge.to) || 0) > 0;
+
+            if (showSource && showTarget) {
                 mermaid += `${edge.from} --> ${edge.to};\n`;
             }
         }
 
-        // Important: include node ID (F1, F2...) in the click handler so the Webview knows which node was clicked
+        // Add Click Events
         for (const [id, fullPath] of idToPath) {
-             if ((nodeDegrees.get(id) || 0) > 0) {
+             // Tương tự: Filter Mode thì add click hết
+             const showNode = isFilterMode || (nodeDegrees.get(id) || 0) > 0;
+             if (showNode) {
                  const safePath = fullPath.replace(/\\/g, '/');
-                 // Signature: onNodeClick(NodeID, FilePath)
                  mermaid += `click ${id} call onNodeClick("${id}", "${safePath}");\n`;
              }
         }
