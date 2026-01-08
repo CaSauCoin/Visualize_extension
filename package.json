@@ -4,7 +4,7 @@
   "description": "Visualize C++ Code Flowchart & Project Dependency Graph. Best for Embedded/IoT.",
   "version": "1.0.1",
   "publisher": "CaSauCoin",  
-  "icon": "icon.png",       
+  "icon": "https://github.com/CaSauCoin/Visualize_extension/blob/main/icon.png?raw=true",       
   "engines": {
     "vscode": "^1.75.0"
   },
